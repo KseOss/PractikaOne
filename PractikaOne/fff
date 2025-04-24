@@ -1,0 +1,396 @@
+using System.Linq;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Data;
+using Apteka.Models;
+using Microsoft.EntityFrameworkCore;
+
+namespace Apteka
+{
+    /// <summary>
+    /// Interaction logic for MainWindow.xaml
+    /// </summary>
+    public partial class MainWindow : Window
+    {
+        private readonly ChemistShopContext _context; // Контекст базы данных
+        private string _currentTable = string.Empty; // Текущая выбранная таблица
+        public MainWindow()
+        {
+            InitializeComponent();
+            _context = new ChemistShopContext();
+        }
+        private void Window_Loaded(object sender, RoutedEventArgs e)
+        {
+            // Можно добавить загрузку первой таблицы по умолчанию
+        }
+
+        private void TableButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (sender is Button button && button.Tag is string table)
+            {
+                _currentTable = table;
+                LoadData();
+            }
+        }
+
+        private void ConfigureDataGridColumns()
+        {
+            MainDataGrid.Columns.Clear();
+
+            switch (_currentTable)
+            {
+                case "Employees":
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "ID", Binding = new Binding("EmployeeId") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Фамилия", Binding = new Binding("LastName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Имя", Binding = new Binding("FirstName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Отчество", Binding = new Binding("MiddleName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Должность", Binding = new Binding("Position") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Дата приема", Binding = new Binding("HireDate") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Зарплата", Binding = new Binding("Salary") });
+                    break;
+
+                case "Medicines":
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "ID", Binding = new Binding("MedicineId") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Артикул", Binding = new Binding("Sku") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Название", Binding = new Binding("MedicineName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Производитель", Binding = new Binding("Manufacturer") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Цена", Binding = new Binding("Price") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Срок годности", Binding = new Binding("ExpiryDate") });
+                    break;
+
+                case "Sales":
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "ID", Binding = new Binding("SaleId") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Фамилия сотрудника", Binding = new Binding("Employee.LastName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Имя сотрудника", Binding = new Binding("Employee.FirstName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Лекарство", Binding = new Binding("Medicine.MedicineName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Количество", Binding = new Binding("Quantity") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Дата", Binding = new Binding("SaleDate") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Сумма", Binding = new Binding("TotalAmount") });
+                    break;
+
+                case "Stock":
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "ID", Binding = new Binding("StockId") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Лекарство", Binding = new Binding("Medicine.MedicineName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Поставщик", Binding = new Binding("Supplier.SupplierName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Количество", Binding = new Binding("Quantity") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Последняя поставка", Binding = new Binding("LastRestockDate") });
+                    break;
+
+                case "Suppliers":
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "ID", Binding = new Binding("SupplierId") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Название", Binding = new Binding("SupplierName") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Контактное лицо", Binding = new Binding("ContactPerson") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Телефон", Binding = new Binding("PhoneNumber") });
+                    MainDataGrid.Columns.Add(new DataGridTextColumn { Header = "Email", Binding = new Binding("Email") });
+                    break;
+            }
+        }
+
+        private void LoadData()
+        {
+            try
+            {
+                switch (_currentTable)
+                {
+                    case "Employees":
+                        MainDataGrid.ItemsSource = _context.Employees.ToList();
+                        break;
+                    case "Medicines":
+                        MainDataGrid.ItemsSource = _context.Medicines.ToList();
+                        break;
+                    case "Sales":
+                        MainDataGrid.ItemsSource = _context.Sales
+                            .Include(s => s.Employee)
+                            .Include(s => s.Medicine)
+                            .ToList();
+                        break;
+                    case "Stock":
+                        MainDataGrid.ItemsSource = _context.Stocks
+                            .Include(s => s.Medicine)
+                            .Include(s => s.Supplier)
+                            .ToList();
+                        break;
+                    case "Suppliers":
+                        MainDataGrid.ItemsSource = _context.Suppliers.ToList();
+                        break;
+                }
+                ConfigureDataGridColumns();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при загрузке данных: {ex.Message}");
+            }
+        }
+
+        // Обработчик кнопки поиска
+        private void SearchButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentTable))
+            {
+                MessageBox.Show("Выберите сверху какую таблицу вы хотите искать.");
+                return;
+            }
+
+            var searchQuery = SearchTextBox.Text.Trim();
+
+            if (string.IsNullOrEmpty(searchQuery))
+            {
+                MessageBox.Show("Введите текст для поиска.");
+                return;
+            }
+
+            try
+            {
+                switch (_currentTable)
+                {
+                    case "Employees":
+                        MainDataGrid.ItemsSource = _context.Employees
+                            .Where(e => e.LastName.Contains(searchQuery) ||
+                                        e.FirstName.Contains(searchQuery) ||
+                                        e.MiddleName.Contains(searchQuery) ||
+                                        e.Position.Contains(searchQuery))
+                            .ToList();
+                        break;
+
+                    case "Medicines":
+                        MainDataGrid.ItemsSource = _context.Medicines
+                            .Where(m => m.Sku.Contains(searchQuery) ||
+                                        m.MedicineName.Contains(searchQuery) ||
+                                        m.Manufacturer.Contains(searchQuery))
+                            .ToList();
+                        break;
+
+                    case "Sales":
+                        MainDataGrid.ItemsSource = _context.Sales
+                            .Where(s => s.Employee.LastName.Contains(searchQuery) ||
+                                        s.Employee.FirstName.Contains(searchQuery) ||
+                                        s.Medicine.MedicineName.Contains(searchQuery) ||
+                                        s.Medicine.Manufacturer.Contains(searchQuery))
+                            .ToList();
+                        break;
+
+                    case "Stock":
+                        MainDataGrid.ItemsSource = _context.Stocks
+                            .Where(s => s.Medicine.MedicineName.Contains(searchQuery) ||
+                                        s.Supplier.SupplierName.Contains(searchQuery))
+                            .ToList();
+                        break;
+
+                    case "Suppliers":
+                        MainDataGrid.ItemsSource = _context.Suppliers
+                            .Where(s => s.SupplierName.Contains(searchQuery) ||
+                                        s.ContactPerson.Contains(searchQuery) ||
+                                        s.PhoneNumber.Contains(searchQuery) ||
+                                        s.Email.Contains(searchQuery))
+                            .ToList();
+                        break;
+
+                    default:
+                        MessageBox.Show("Неизвестная таблица.");
+                        return;
+                }
+
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при выполнении поиска: {ex.Message}");
+            }
+        }
+        private void RefreshButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!string.IsNullOrEmpty(_currentTable))
+            {
+                LoadData();
+            }
+            else
+            {
+                MessageBox.Show("Выберите таблицу для обновления.");
+            }
+        }
+
+        private void AddButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentTable))
+            {
+                MessageBox.Show("Выберите таблицу для добавления записи.");
+                return;
+            }
+
+            switch (_currentTable)
+            {
+                case "Employees":
+                    var addEmployeeWindow = new AddEditEmployeeWindow(new Employee());
+                    if (addEmployeeWindow.ShowDialog() == true)
+                    {
+                        _context.Employees.Add(addEmployeeWindow.Employee);
+                        _context.SaveChanges();
+                        LoadData();
+                    }
+                    break;
+                case "Medicines":
+                    var addMedicineWindow = new AddEditMedicineWindow(new Medicine());
+                    if (addMedicineWindow.ShowDialog() == true)
+                    {
+                        _context.Medicines.Add(addMedicineWindow.Medicine);
+                        _context.SaveChanges();
+                        LoadData();
+                    }
+                    break;
+                case "Sales":
+                    var addSaleWindow = new AddEditSaleWindow(new Sale());
+                    if (addSaleWindow.ShowDialog() == true)
+                    {
+                        _context.Sales.Add(addSaleWindow.Sale);
+                        _context.SaveChanges();
+                        LoadData();
+                    }
+                    break;
+                case "Stock":
+                    var addStockWindow = new AddEditStockWindow(new Stock());
+                    if (addStockWindow.ShowDialog() == true)
+                    {
+                        _context.Stocks.Add(addStockWindow.Stock);
+                        _context.SaveChanges();
+                        LoadData();
+                    }
+                    break;
+                case "Suppliers":
+                    var addSupplierWindow = new AddEditSupplierWindow(new Supplier());
+                    if (addSupplierWindow.ShowDialog() == true)
+                    {
+                        _context.Suppliers.Add(addSupplierWindow.Supplier);
+                        _context.SaveChanges();
+                        LoadData();
+                    }
+                    break;
+            }
+        }
+
+        private void EditButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentTable) || MainDataGrid.SelectedItem == null)
+            {
+                MessageBox.Show("Выберите запись для редактирования.");
+                return;
+            }
+
+            switch (_currentTable)
+            {
+                case "Employees":
+                    if (MainDataGrid.SelectedItem is Employee selectedEmployee)
+                    {
+                        var editEmployeeWindow = new AddEditEmployeeWindow(selectedEmployee);
+                        if (editEmployeeWindow.ShowDialog() == true)
+                        {
+                            _context.SaveChanges();
+                            LoadData();
+                        }
+                    }
+                    break;
+                case "Medicines":
+                    if (MainDataGrid.SelectedItem is Medicine selectedMedicine)
+                    {
+                        var editMedicineWindow = new AddEditMedicineWindow(selectedMedicine);
+                        if (editMedicineWindow.ShowDialog() == true)
+                        {
+                            _context.SaveChanges();
+                            LoadData();
+                        }
+                    }
+                    break;
+                case "Sales":
+                    if (MainDataGrid.SelectedItem is Sale selectedSale)
+                    {
+                        var editSaleWindow = new AddEditSaleWindow(selectedSale);
+                        if (editSaleWindow.ShowDialog() == true)
+                        {
+                            _context.SaveChanges();
+                            LoadData();
+                        }
+                    }
+                    break;
+                case "Stock":
+                    if (MainDataGrid.SelectedItem is Stock selectedStock)
+                    {
+                        var editStockWindow = new AddEditStockWindow(selectedStock);
+                        if (editStockWindow.ShowDialog() == true)
+                        {
+                            _context.SaveChanges();
+                            LoadData();
+                        }
+                    }
+                    break;
+                case "Suppliers":
+                    if (MainDataGrid.SelectedItem is Supplier selectedSupplier)
+                    {
+                        var editSupplierWindow = new AddEditSupplierWindow(selectedSupplier);
+                        if (editSupplierWindow.ShowDialog() == true)
+                        {
+                            _context.SaveChanges();
+                            LoadData();
+                        }
+                    }
+                    break;
+            }
+        }
+
+        private void DeleteButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (string.IsNullOrEmpty(_currentTable) || MainDataGrid.SelectedItem == null)
+            {
+                MessageBox.Show("Выберите запись для удаления.");
+                return;
+            }
+
+            if (MessageBox.Show("Вы уверены, что хотите удалить запись?", "Подтверждение", MessageBoxButton.YesNo) != MessageBoxResult.Yes)
+            {
+                return;
+            }
+
+            try
+            {
+                switch (_currentTable)
+                {
+                    case "Employees":
+                        if (MainDataGrid.SelectedItem is Employee employeeToDelete)
+                        {
+                            _context.Employees.Remove(employeeToDelete);
+                        }
+                        break;
+                    case "Medicines":
+                        if (MainDataGrid.SelectedItem is Medicine medicineToDelete)
+                        {
+                            _context.Medicines.Remove(medicineToDelete);
+                        }
+                        break;
+                    case "Sales":
+                        if (MainDataGrid.SelectedItem is Sale saleToDelete)
+                        {
+                            _context.Sales.Remove(saleToDelete);
+                        }
+                        break;
+                    case "Stock":
+                        if (MainDataGrid.SelectedItem is Stock stockToDelete)
+                        {
+                            _context.Stocks.Remove(stockToDelete);
+                        }
+                        break;
+                    case "Suppliers":
+                        if (MainDataGrid.SelectedItem is Supplier supplierToDelete)
+                        {
+                            _context.Suppliers.Remove(supplierToDelete);
+                        }
+                        break;
+                }
+
+                _context.SaveChanges();
+                LoadData();
+                MessageBox.Show("Запись успешно удалена.");
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Ошибка при удалении записи: {ex.Message}\n{ex.InnerException?.Message}");
+            }
+        }
+    }
+}
